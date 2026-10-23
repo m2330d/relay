@@ -4,15 +4,23 @@ const http = require('http');
 const https = require('https');
 
 // ===================== تنظیمات =====================
-const PANEL = { scheme: 'https', host: 'nod1.parskhodro.shop', port: 8443 };   // پنل مدیریت
-const SUB   = { scheme: 'https', host: 'nod1.parskhodro.shop', port: 2096 };   // سابسکریپشن
-const SUB_PATHS = ['/hkgv58zx4pnnqfbz/'];                                       // URI Path ساب
+const ORIGIN_HOST = 'celpipassistant.study';   // دامنه‌ی سرور شما که Caddy روی آن TLS دارد
 
-// مسیر WebSocket هر اینباند ← دامنه و پورت همان اینباند
+// پنل و ساب از طریق Caddy روی پورت 443
+const PANEL = { scheme: 'https', host: ORIGIN_HOST, port: 443 };
+const SUB   = { scheme: 'https', host: ORIGIN_HOST, port: 443 };
+const SUB_PATHS = ['/3s6p3s9vdhwt9ein/'];            // URI Path ساب در پنل
+
+// اینباندهای WebSocket و HTTPUpgrade: مسیر ← مقصد (Caddy به پورت درست می‌فرستد)
+const T = { scheme: 'https', host: ORIGIN_HOST, port: 443 };
 const WS_ROUTES = {
-  '/579albx2vgoe6gwogbzm58713hwuqutrnxb84621bqodhry7v49balo': { scheme: 'https', host: 'nod1.parskhodro.shop', port: 2083 }, // trojan
-  '/jsjdkebus164648he5464vwoeu546798123h516jekwpry8163g':     { scheme: 'https', host: 'jig.parskhodro.shop',  port: 2087 }, // vless
-  '/urkydff5354sajptc4f587mzrphda52479087ifjtspus5f417':      { scheme: 'https', host: 'nod1.parskhodro.shop', port: 2053 }, // vmess
+  '/vws-iy2iiyqg2g8ftu1bxh': T, // vless-ws
+  '/mws-kft0ayw9u5viov0lli': T, // vmess-ws
+  '/tws-9peqllz8x1mkndry0b': T, // trojan-ws
+  '/vhu-16wrqioszormq1xmj5': T, // vless-httpupgrade
+  '/mhu-yp48imte0t3k7hdu8r': T, // vmess-httpupgrade
+  '/thu-psq8j4yt686bh809ta': T, // trojan-httpupgrade
+  '/sws-vhmpp1f2g7ee2occd4': T, // shadowsocks-ws
 };
 
 // قفل ورود به پنل (اختیاری): متغیر محیطی ACCESS_KEY (فقط حروف و عدد انگلیسی)
@@ -154,14 +162,14 @@ function rewriteLink(link, wh) {
   try {
     if (link.startsWith('vmess://')) {
       const o = JSON.parse(b64d(link.slice(8)));
-      if (o.net !== 'ws' || !WS_ROUTES[o.path]) return link;
+      if (!['ws', 'httpupgrade'].includes(o.net) || !WS_ROUTES[o.path]) return link;
       Object.assign(o, { add: wh, port: 443, host: wh, sni: wh, tls: 'tls', alpn: 'http/1.1' });
       return 'vmess://' + b64e(JSON.stringify(o));
     }
-    const m = link.match(/^(vless|trojan):\/\/([^@]+)@(\[[^\]]+\]|[^:\/?#]+):(\d+)\?([^#]*)(#.*)?$/);
+    const m = link.match(/^(vless|trojan|ss):\/\/([^@]+)@(\[[^\]]+\]|[^:\/?#]+):(\d+)\?([^#]*)(#.*)?$/);
     if (!m) return link;
     const q = new URLSearchParams(m[5]);
-    if (q.get('type') !== 'ws' || !WS_ROUTES[q.get('path')]) return link;
+    if (!['ws', 'httpupgrade'].includes(q.get('type')) || !WS_ROUTES[q.get('path')]) return link;
     q.set('host', wh); q.set('sni', wh); q.set('alpn', 'http/1.1');
     return `${m[1]}://${m[2]}@${wh}:443?${q.toString()}${m[6] || ''}`;
   } catch {
